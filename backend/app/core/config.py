@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     database_url: str = 'sqlite:///./jm_trading.db'
+    market_data_provider: str = 'yahoo'
     upload_dir: str = '../data/incoming'
     quote_refresh_seconds: int = 60
     benchmark_isin: str | None = None
