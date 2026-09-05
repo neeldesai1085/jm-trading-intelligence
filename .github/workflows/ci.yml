@@ -10,8 +10,8 @@ jobs:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt pytest
       - run: python -m compileall -q backend/app scripts tests
-      - run: DATABASE_URL=sqlite:///./ci_schema.db APP_ENV=test python -c "from app.db.session import Base, engine; Base.metadata.create_all(bind=engine)"
-      - run: pytest -q
+      - run: PYTHONPATH=backend DATABASE_URL=sqlite:///./ci_schema.db APP_ENV=test AUTH_SECRET=unit-test-secret-change-me-abcdefghijklmnopqrstuvwxyz python -c "from app.db.session import Base, engine; import app.models.entities; Base.metadata.create_all(bind=engine)"
+      - run: PYTHONPATH=backend DATABASE_URL=sqlite:///./tests/ci_test.db APP_ENV=test AUTH_SECRET=unit-test-secret-change-me-abcdefghijklmnopqrstuvwxyz pytest -q
   frontend:
     runs-on: ubuntu-latest
     steps:
