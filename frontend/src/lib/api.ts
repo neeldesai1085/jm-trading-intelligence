@@ -1,1 +1,8 @@
-export const API=import.meta.env.VITE_API_URL||'/api';export const TOKEN_KEY='jmti_token';export function getToken(){return localStorage.getItem(TOKEN_KEY)}export function setToken(token:string){localStorage.setItem(TOKEN_KEY,token)}export function clearToken(){localStorage.removeItem(TOKEN_KEY)}async function request(path:string,init:RequestInit={}){const headers=new Headers(init.headers||{});const token=getToken();if(token)headers.set('Authorization',`Bearer ${token}`);const r=await fetch(API+path,{...init,headers});if(!r.ok){let detail='Request failed';try{const body=await r.json();detail=body.detail||JSON.stringify(body)}catch{detail=await r.text()||detail}if(r.status===401){clearToken();window.dispatchEvent(new Event('jmti-logout'))}throw new Error(detail)}return r.status===204?null:r.json()}export async function get<T=any>(path:string):Promise<T>{return request(path)}export async function upload(files:File[]):Promise<any>{const f=new FormData();files.forEach(x=>f.append('files',x));return request('/imports/upload',{method:'POST',body:f})}export async function login(member_name:string,access_code:string){return request('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({member_name,access_code})})}export async function authConfig(){return request('/auth/config')}
+export const API=import.meta.env.VITE_API_URL||'/api';
+async function request(path:string,init:RequestInit={}){
+ const r=await fetch(API+path,init);
+ if(!r.ok){let detail='Request failed';try{const body=await r.json();detail=body.detail||JSON.stringify(body)}catch{detail=await r.text()||detail}throw new Error(detail)}
+ return r.status===204?null:r.json();
+}
+export async function get<T=any>(path:string):Promise<T>{return request(path)}
+export async function upload(files:File[]):Promise<any>{const f=new FormData();files.forEach(x=>f.append('files',x));return request('/imports/upload',{method:'POST',body:f})}
