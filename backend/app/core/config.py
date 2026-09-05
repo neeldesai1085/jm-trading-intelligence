@@ -17,18 +17,5 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = False
     auth_cookie_samesite: str = 'lax'
     rate_limit_per_minute: int = 30
-    password_reset_minutes: int = 30
-    smtp_host: str | None = None
-    smtp_port: int = 587
-    smtp_user: str | None = None
-    smtp_password: str | None = None
-    smtp_from: str | None = None
-    object_storage_provider: str = 'local'
-    store_raw_pdf: bool = False
-    s3_bucket: str | None = None
-    s3_endpoint_url: str | None = None
-    s3_region: str | None = None
-    s3_access_key_id: str | None = None
-    s3_secret_access_key: str | None = None
 
 settings = Settings()
