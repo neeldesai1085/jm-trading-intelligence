@@ -1,6 +1,6 @@
 # JM Trading Intelligence
 
-A private family trading-analysis app built around JM Financial contract notes. It replaces the spreadsheet workflow with a database-backed web dashboard while keeping deterministic FIFO accounting, charges, reconciliation, graphs, risk analysis and live market-data adapters.
+A small personal trading-analysis app built around JM Financial contract notes. It replaces the spreadsheet workflow with a database-backed web dashboard while keeping deterministic FIFO accounting, charges, reconciliation, graphs, risk analysis and live market-data adapters.
 
 ## What it does
 
@@ -12,11 +12,10 @@ A private family trading-analysis app built around JM Financial contract notes. 
 - Connect to Upstox or Zerodha for LTP/OHLC/volume and stream quote updates to the dashboard.
 - Provide advanced trade-quality metrics, stress tests, quote freshness, MFE/MAE snapshots and optional strategy annotations.
 - Optional benchmark snapshots can be collected for approximate beta/alpha-like analysis.
-- Optional household access-code login keeps the shared workspace private.
 
-## Family-first architecture
+## Small-user architecture
 
-This is intentionally **not a commercial SaaS architecture**. It is designed for a small household: a static frontend on Vercel, one small FastAPI service on Render, and a small free PostgreSQL database. There is no paid infrastructure requirement in the repository.
+This is intentionally **not a commercial SaaS architecture**. It is designed for a very small number of trusted users: a static frontend on Vercel, one small FastAPI service on Render, and a small database. There is no account-management, multi-tenant, or family-login layer.
 
 Recommended deployment:
 
@@ -27,36 +26,33 @@ Vercel Hobby frontend
         v
 Render Free FastAPI backend
         |
-        +---- Supabase Free or Neon Free PostgreSQL
+        +---- SQLite for the simplest setup
+        |     or free PostgreSQL for persistent cloud data
         |
         +---- Upstox / Zerodha API (optional)
 ```
 
-Use an external PostgreSQL database for deployed data. Do not rely on local SQLite on Render for the production copy because Render web-service files are ephemeral. Uploaded PDFs are processed and then removed from the temporary server filesystem; the extracted trading ledger is what is retained.
+Uploaded PDFs are processed and then removed from temporary server storage; the extracted trading ledger is what is retained.
 
 ## Free deployment
 
-### 1. Create the database
-
-Create a free PostgreSQL database with Supabase or Neon. Copy its PostgreSQL connection string.
-
-### 2. Deploy backend to Render
+### Backend on Render
 
 The repository includes `render.yaml`. Create a Render Blueprint from this repository and select the Free web-service plan.
 
-Set these Render environment variables:
+For the simplest deployment you can use the default SQLite configuration. Be aware that a free Render web service has an ephemeral filesystem, so a SQLite database there is not a reliable permanent backup. For persistent cloud history, set `DATABASE_URL` to a free PostgreSQL provider such as Supabase or Neon.
+
+Set:
 
 ```text
-DATABASE_URL=<PostgreSQL connection string>
-APP_ACCESS_CODE=<private family code>
-AUTH_SECRET=<long random secret>
+DATABASE_URL=<SQLite default or PostgreSQL connection string>
 CORS_ORIGINS=https://YOUR-APP.vercel.app
 MARKET_DATA_PROVIDER=mock
 ```
 
 For live prices, choose `upstox` or `zerodha` and add the corresponding provider credentials. Keep those credentials only in Render environment variables; never commit them.
 
-### 3. Deploy frontend to Vercel
+### Frontend on Vercel
 
 Import the GitHub repository into Vercel. The included `vercel.json` builds `frontend/` and publishes `frontend/dist`.
 
@@ -67,21 +63,16 @@ VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
 VITE_WS_URL=wss://YOUR-RENDER-SERVICE.onrender.com/api/ws/quotes
 ```
 
-### 4. Configure family access
-
-When `APP_ACCESS_CODE` is set, users see a small login page. Every household member can use their own display name with the same shared family access code. This is intentionally a simple household gate, not enterprise identity management.
-
-### 5. Upload the historical contract notes
+### Upload the historical contract notes
 
 After the app opens:
 
-1. Sign in.
-2. Open **Upload PDFs**.
-3. Select your JM Financial contract-note PDFs.
-4. Let the importer build the ledger.
-5. Open **Excel Replacement** to inspect the workbook-equivalent analysis.
-6. Configure **Market Data** mappings for the securities you want live prices for.
-7. Open **Risk & Intelligence** and **Advanced Analytics** for the decision-support layer.
+1. Open **Upload PDFs**.
+2. Select your JM Financial contract-note PDFs.
+3. Let the importer build the ledger.
+4. Open **Excel Replacement** to inspect the workbook-equivalent analysis.
+5. Configure **Market Data** mappings for the securities you want live prices for.
+6. Open **Risk & Intelligence** and **Advanced Analytics** for the decision-support layer.
 
 ## Local run
 
@@ -103,6 +94,6 @@ The repository's CI also builds the frontend and validates Docker Compose config
 
 ## Important free-tier behavior
 
-Free hosting is suitable for a small family, but it has limits. The Render service can sleep when idle, so the first request after inactivity can be slower. External free PostgreSQL services also have storage/usage limits and may pause or sleep under inactivity. The application therefore keeps the architecture small and avoids a paid Redis/worker/object-storage stack.
+Free hosting is suitable for a small number of users, but it has limits. The Render service can sleep when idle, so the first request after inactivity can be slower. Free database services also have storage/usage limits. The application therefore keeps the architecture small and avoids a paid Redis/worker/object-storage stack.
 
-Live-market availability also depends on the API access and rate limits of your chosen broker/provider. If no provider credentials or instrument mapping exist, the app shows missing quotes rather than inventing prices.
+Live-market availability depends on the API access and rate limits of your chosen broker/provider. If no provider credentials or instrument mapping exist, the app shows missing quotes rather than inventing prices.
