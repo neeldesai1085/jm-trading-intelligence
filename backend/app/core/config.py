@@ -7,8 +7,14 @@ class Settings(BaseSettings):
     zerodha_api_key: str | None = None
     zerodha_access_token: str | None = None
     upload_dir: str = '../data/incoming'
-    quote_refresh_seconds: int = 15
+    quote_refresh_seconds: int = 30
+    benchmark_isin: str | None = None
+    benchmark_instrument_key: str | None = None
     app_env: str = 'development'
+    app_access_code: str | None = None
+    auth_secret: str = 'change-this-secret-in-production'
+    auth_session_hours: int = 72
+    app_name: str = 'JM Trading Intelligence'
     cors_origins: str = 'http://localhost:5173,http://127.0.0.1:5173'
     model_config = SettingsConfigDict(env_file='../.env', extra='ignore')
 

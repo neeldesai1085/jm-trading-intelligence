@@ -8,22 +8,28 @@ services:
       ZERODHA_API_KEY: ${ZERODHA_API_KEY:-}
       ZERODHA_ACCESS_TOKEN: ${ZERODHA_ACCESS_TOKEN:-}
       UPLOAD_DIR: /data/incoming
-      QUOTE_REFRESH_SECONDS: ${QUOTE_REFRESH_SECONDS:-15}
+      QUOTE_REFRESH_SECONDS: ${QUOTE_REFRESH_SECONDS:-30}
+      BENCHMARK_ISIN: ${BENCHMARK_ISIN:-}
+      BENCHMARK_INSTRUMENT_KEY: ${BENCHMARK_INSTRUMENT_KEY:-}
       APP_ENV: ${APP_ENV:-production}
+      APP_ACCESS_CODE: ${APP_ACCESS_CODE:-}
+      AUTH_SECRET: ${AUTH_SECRET:-change-this-secret}
+      AUTH_SESSION_HOURS: ${AUTH_SESSION_HOURS:-72}
+      APP_NAME: ${APP_NAME:-JM Trading Intelligence}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     volumes:
       - ./data:/data
     ports:
-      - "8000:8000"
+      - '8000:8000'
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      test: ['CMD','python','-c',"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
   frontend:
     build: ./frontend
     ports:
-      - "5173:80"
+      - '5173:80'
     depends_on:
       backend:
         condition: service_healthy
