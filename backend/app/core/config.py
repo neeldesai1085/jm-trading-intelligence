@@ -3,15 +3,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     database_url: str = 'sqlite:///./jm_trading.db'
-    market_data_provider: str = 'yahoo'
-    upstox_access_token: str | None = None
-    zerodha_api_key: str | None = None
-    zerodha_access_token: str | None = None
-    zerodha_api_secret: str | None = None
     upload_dir: str = '../data/incoming'
     quote_refresh_seconds: int = 60
     benchmark_isin: str | None = None
-    benchmark_instrument_key: str | None = None
+    benchmark_yahoo_symbol: str | None = None
     app_env: str = 'development'
     cors_origins: str = 'http://localhost:5173,http://127.0.0.1:5173'
     auth_secret: str = 'change-this-secret'
@@ -34,10 +29,5 @@ class Settings(BaseSettings):
     s3_region: str | None = None
     s3_access_key_id: str | None = None
     s3_secret_access_key: str | None = None
-    token_encryption_key: str | None = None
-    upstox_client_id: str | None = None
-    upstox_client_secret: str | None = None
-    upstox_redirect_uri: str | None = None
-    zerodha_redirect_uri: str | None = None
 
 settings = Settings()
