@@ -6,16 +6,6 @@ services:
     dockerfilePath: ./backend/Dockerfile
     healthCheckPath: /api/health
     envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: APP_ACCESS_CODE
-        sync: false
-      - key: AUTH_SECRET
-        sync: false
-      - key: AUTH_SESSION_HOURS
-        value: '72'
-      - key: APP_NAME
-        value: JM Trading Intelligence
       - key: APP_ENV
         value: production
       - key: MARKET_DATA_PROVIDER
@@ -24,5 +14,7 @@ services:
         sync: false
       - key: QUOTE_REFRESH_SECONDS
         value: '30'
+      - key: DATABASE_URL
+        value: sqlite:////tmp/jm_trading.db
       - key: UPLOAD_DIR
         value: /tmp/jmti
