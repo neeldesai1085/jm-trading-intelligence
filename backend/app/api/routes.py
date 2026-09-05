@@ -9,6 +9,7 @@ from app.db.session import get_db, SessionLocal
 from app.models.entities import ImportBatch, ContractNote, Execution, SecurityLedger, MarketQuote, InstrumentMapping
 from app.services.importer import import_pdf
 from app.services.analytics import overview, intelligence
+from app.services.excel_parity import build_excel_parity
 from app.services.market_data import MockProvider, UpstoxProvider, ZerodhaProvider
 from app.core.config import settings
 router=APIRouter()
@@ -34,6 +35,8 @@ def imports(db:Session=Depends(get_db)):
 def dashboard(db:Session=Depends(get_db)):return overview(db)
 @router.get('/intelligence')
 def intel(db:Session=Depends(get_db)):return intelligence(db)
+@router.get('/excel-parity')
+def excel_parity(db:Session=Depends(get_db)):return build_excel_parity(db)
 @router.get('/risk')
 def risk(db:Session=Depends(get_db)):return overview(db)['risk']
 @router.get('/performance/daily')
