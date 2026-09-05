@@ -34,8 +34,13 @@ def test_auth_and_refresh():
         r = client.post('/api/auth/register', json={'name': 'CI User', 'email': 'ci@example.com', 'password': 'CiPass123!'})
         assert r.status_code == 200, r.text
         token = r.json()['access_token']
+        refresh_token = r.json()['refresh_token']
+        assert refresh_token
         assert client.get('/api/auth/me', headers={'Authorization': f'Bearer {token}'}).status_code == 200
-        assert client.post('/api/auth/refresh').status_code == 200
+        refreshed = client.post('/api/auth/refresh', json={'refresh_token': refresh_token})
+        assert refreshed.status_code == 200, refreshed.text
+        assert refreshed.json()['access_token']
+        assert refreshed.json()['refresh_token'] != refresh_token
 
 
 def test_source_regression_when_private_file_is_available():
