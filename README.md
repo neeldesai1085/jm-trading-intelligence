@@ -13,6 +13,7 @@ JM Trading Intelligence is a multi-user, multi-portfolio trading analytics platf
 7. FIFO realized P&L and remaining open holdings are calculated from the stored execution ledger.
 8. Dashboard, risk, intelligence, advanced analytics, charges, missing dates and Excel-parity views are generated from database data.
 9. Yahoo Finance can enrich open holdings with informational market prices.
+10. Advanced analytics use NIFTY 50 (`^NSEI`) as the built-in market benchmark.
 
 The database is the long-lived source of truth. No S3 bucket, object-storage service, email service, broker connection, or broker API is required.
 
@@ -25,6 +26,7 @@ The database is the long-lived source of truth. No S3 bucket, object-storage ser
 - JWT access authentication and rotating HttpOnly refresh cookies.
 - Authenticated password change.
 - Yahoo Finance market-data enrichment with ISIN-to-ticker mappings.
+- Fixed NIFTY 50 benchmark for advanced relative-performance analytics.
 - Dashboard, Excel parity, risk, intelligence and advanced analytics.
 - Paginated historical tables and CSV/full JSON exports.
 - Background PDF import status tracking.
@@ -56,7 +58,7 @@ POST /api/imports/upload
 POST /api/imports/upload/background
 ```
 
-The backend writes each upload to a temporary working path, parses it, persists the extracted trading information, and deletes the temporary PDF in a `finally` cleanup path. No raw PDF archive is maintained.
+The backend writes each upload to a temporary working path, parses it, persists the extracted trading information, and deletes the temporary PDF in a cleanup path. No raw PDF archive is maintained.
 
 The import stores the filename and SHA-256 file hash as import metadata so that uploading the same document again does not duplicate its database records. The PDF itself is not required after successful analysis.
 
@@ -69,10 +71,11 @@ Yahoo Finance is the only market-data provider. No broker account or market-data
 ```env
 MARKET_DATA_PROVIDER=yahoo
 QUOTE_REFRESH_SECONDS=60
-BENCHMARK_YAHOO_SYMBOL=^NSEI
 ```
 
-Explicit mappings can be supplied through:
+NIFTY 50 is the built-in benchmark for advanced analytics. Its Yahoo Finance symbol is hardcoded as `^NSEI`; there is no benchmark environment variable or user configuration.
+
+Explicit security mappings can be supplied through:
 
 ```text
 GET  /api/instrument-mappings
@@ -150,7 +153,7 @@ WS   /api/ws/quotes
 
 ## Configuration
 
-Copy `.env.example` to `.env` for local use.
+Copy `.env.example` to `.env` for local use. The benchmark is intentionally not configurable: NIFTY 50 is built into the application.
 
 ### Local
 
@@ -161,7 +164,6 @@ CORS_ORIGINS=http://localhost:5173
 UPLOAD_DIR=../data/incoming
 MARKET_DATA_PROVIDER=yahoo
 QUOTE_REFRESH_SECONDS=60
-BENCHMARK_YAHOO_SYMBOL=^NSEI
 AUTH_SECRET=replace-with-a-long-random-secret-at-least-32-characters
 AUTH_ACCESS_MINUTES=20
 AUTH_REFRESH_DAYS=30
@@ -180,7 +182,6 @@ CORS_ORIGINS=https://your-frontend.example
 UPLOAD_DIR=/tmp/jmti
 MARKET_DATA_PROVIDER=yahoo
 QUOTE_REFRESH_SECONDS=60
-BENCHMARK_YAHOO_SYMBOL=^NSEI
 AUTH_SECRET=<long-random-secret>
 AUTH_ACCESS_MINUTES=20
 AUTH_REFRESH_DAYS=30
@@ -191,6 +192,12 @@ RATE_LIMIT_PER_MINUTE=30
 ```
 
 No `SMTP_*`, `PASSWORD_RESET_*`, `S3_*`, `OBJECT_STORAGE_*`, broker, Upstox or Zerodha variables are required.
+
+## Database schema lifecycle
+
+SQLAlchemy ORM models are the schema definition. The application runs `Base.metadata.create_all()` at startup so a fresh database receives all required tables automatically. There is no separate database migration command or migration tool in the repository.
+
+This intentionally favors a simple single-application deployment model. When an existing production schema requires a structural change, the application schema and deployment should be updated together; `create_all()` creates missing objects but does not alter existing columns or constraints.
 
 ## Deployment
 
@@ -218,6 +225,8 @@ cd ..
 uvicorn backend.app.main:app --reload
 ```
 
+The application creates the SQLite schema automatically at startup.
+
 ### Frontend
 
 ```bash
@@ -234,7 +243,7 @@ docker compose up --build
 
 ## Verification and CI
 
-The CI workflow compiles the backend, creates a fresh database through Alembic, runs the backend tests, builds the frontend and validates Docker Compose configuration.
+The CI workflow compiles the backend, verifies that the SQLAlchemy schema can be created on a fresh database, runs the backend tests, builds the frontend and validates Docker Compose configuration.
 
 Run the backend tests locally with:
 
@@ -242,7 +251,7 @@ Run the backend tests locally with:
 DATABASE_URL=sqlite:///./tests/ci_test.db APP_ENV=test AUTH_SECRET=unit-test-secret-change-me-abcdefghijklmnopqrstuvwxyz pytest -q
 ```
 
-The current local baseline is 8 passing backend tests when the private source PDF is available; the source-dependent import test is skipped in CI when the private PDF is not present.
+The backend test suite contains 8 tests in the current baseline, including the real JM Financial PDF checks when the private source files are available.
 
 ## Architecture notes
 
@@ -251,4 +260,4 @@ The current local baseline is 8 passing backend tests when the private source PD
 - PDFs are temporary input documents, not stored assets.
 - Password reset is intentionally limited to authenticated password change; there is no email delivery path.
 - Yahoo Finance is an informational market-data source and does not execute trades.
-- Historical Alembic migrations may contain references to features that existed in older releases. A cleanup migration removes their runtime database objects. They are retained as migration history so existing databases can upgrade safely.
+- NIFTY 50 (`^NSEI`) is the fixed benchmark used by advanced analytics.
