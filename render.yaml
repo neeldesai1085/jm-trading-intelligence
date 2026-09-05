@@ -18,6 +18,8 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: MARKET_DATA_PROVIDER
+        value: yahoo
       - key: AUTH_ACCESS_MINUTES
         value: '20'
       - key: AUTH_REFRESH_DAYS
@@ -40,17 +42,5 @@ services:
         value: '30'
       - key: UPLOAD_DIR
         value: /tmp/jmti
-      - key: STORE_RAW_PDF
-        value: 'false'
       - key: BENCHMARK_YAHOO_SYMBOL
         value: '^NSEI'
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        value: '587'
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: SMTP_FROM
-        sync: false
