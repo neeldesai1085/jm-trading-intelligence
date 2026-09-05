@@ -12,7 +12,6 @@ from app.services.analytics import overview, intelligence
 from app.services.excel_parity import build_excel_parity
 from app.services.market_data import MockProvider, UpstoxProvider, ZerodhaProvider
 from app.services.advanced_analytics import advanced
-from app.services.auth import websocket_member
 from app.core.config import settings
 router=APIRouter()
 def provider():
@@ -125,7 +124,6 @@ def export_data(kind:str,db:Session=Depends(get_db)):
     return {'filename':f'{kind}.csv','content':out.getvalue()}
 @router.websocket('/ws/quotes')
 async def quote_socket(websocket:WebSocket):
-    if websocket_member(websocket) is None:await websocket.close(code=1008,reason='Authentication required');return
     await websocket.accept()
     try:
         while True:
