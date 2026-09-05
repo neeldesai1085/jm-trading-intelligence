@@ -1,8 +1,12 @@
 export const API=import.meta.env.VITE_API_URL||'/api';
-async function request(path:string,init:RequestInit={}){
- const r=await fetch(API+path,init);
- if(!r.ok){let detail='Request failed';try{const body=await r.json();detail=body.detail||JSON.stringify(body)}catch{detail=await r.text()||detail}throw new Error(detail)}
- return r.status===204?null:r.json();
-}
+const ACCESS_KEY='jmti_access_token'; const REFRESH_KEY='jmti_refresh_token';
+export type SessionUser={id:number,email:string,name:string};
+export const auth={get access(){return localStorage.getItem(ACCESS_KEY)},get refresh(){return localStorage.getItem(REFRESH_KEY)},save(d:any){localStorage.setItem(ACCESS_KEY,d.access_token);localStorage.setItem(REFRESH_KEY,d.refresh_token)},clear(){localStorage.removeItem(ACCESS_KEY);localStorage.removeItem(REFRESH_KEY)}};
+async function refreshSession(){const token=auth.refresh;if(!token)return false;const r=await fetch(API+'/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:token})});if(!r.ok){auth.clear();return false}auth.save(await r.json());return true}
+async function request(path:string,init:RequestInit={},retry=true){const headers=new Headers(init.headers||{});const token=auth.access;if(token)headers.set('Authorization',`Bearer ${token}`);const r=await fetch(API+path,{...init,headers});if(r.status===401&&retry&&!path.startsWith('/auth/')){if(await refreshSession())return request(path,init,false);auth.clear();window.dispatchEvent(new Event('auth-expired'))}if(!r.ok){let detail='Request failed';try{const b=await r.json();detail=b.detail||JSON.stringify(b)}catch{detail=await r.text()||detail}throw new Error(detail)}return r.status===204?null:r.json()}
 export async function get<T=any>(path:string):Promise<T>{return request(path)}
-export async function upload(files:File[]):Promise<any>{const f=new FormData();files.forEach(x=>f.append('files',x));return request('/imports/upload',{method:'POST',body:f})}
+export async function post<T=any>(path:string,body:any):Promise<T>{return request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+export async function upload(files:File[]){const f=new FormData();files.forEach(x=>f.append('files',x));return request('/imports/upload',{method:'POST',body:f})}
+export async function login(email:string,password:string){const r=await request('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})},false);auth.save(r);return r}
+export async function register(name:string,email:string,password:string){const r=await request('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})},false);auth.save(r);return r}
+export async function logout(){const token=auth.refresh;if(token)await request('/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:token})},false).catch(()=>{});auth.clear()}

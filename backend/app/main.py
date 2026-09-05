@@ -5,7 +5,10 @@ from app.db.session import Base, engine
 from app.api.routes import router
 from app.core.config import settings
 
-Base.metadata.create_all(bind=engine)
+if settings.app_env.lower() != 'production':
+    Base.metadata.create_all(bind=engine)
+if settings.app_env.lower() == 'production' and (not settings.auth_secret or len(settings.auth_secret) < 32 or settings.auth_secret == 'change-this-secret'):
+    raise RuntimeError('AUTH_SECRET must be set to a random value of at least 32 characters in production')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
