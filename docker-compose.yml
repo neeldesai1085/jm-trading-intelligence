@@ -3,14 +3,10 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/jm_trading.db}
-      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-mock}
-      UPSTOX_ACCESS_TOKEN: ${UPSTOX_ACCESS_TOKEN:-}
-      ZERODHA_API_KEY: ${ZERODHA_API_KEY:-}
-      ZERODHA_ACCESS_TOKEN: ${ZERODHA_ACCESS_TOKEN:-}
       UPLOAD_DIR: /data/incoming
-      QUOTE_REFRESH_SECONDS: ${QUOTE_REFRESH_SECONDS:-30}
+      QUOTE_REFRESH_SECONDS: ${QUOTE_REFRESH_SECONDS:-60}
       BENCHMARK_ISIN: ${BENCHMARK_ISIN:-}
-      BENCHMARK_INSTRUMENT_KEY: ${BENCHMARK_INSTRUMENT_KEY:-}
+      BENCHMARK_YAHOO_SYMBOL: ${BENCHMARK_YAHOO_SYMBOL:-^NSEI}
       APP_ENV: ${APP_ENV:-development}
       AUTH_SECRET: ${AUTH_SECRET:-local-development-secret-change-me-1234567890}
       AUTH_ACCESS_MINUTES: ${AUTH_ACCESS_MINUTES:-20}
@@ -25,6 +21,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
   frontend:
     build: ./frontend
     ports:

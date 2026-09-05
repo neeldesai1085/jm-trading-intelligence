@@ -6,6 +6,7 @@ databases:
     databaseName: jmti
     user: jmti
     diskSizeGB: 5
+
 services:
   - type: web
     name: jm-trading-intelligence-api
@@ -17,8 +18,6 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-      - key: MARKET_DATA_PROVIDER
-        value: mock
       - key: AUTH_ACCESS_MINUTES
         value: '20'
       - key: AUTH_REFRESH_DAYS
@@ -36,27 +35,15 @@ services:
           name: jm-trading-intelligence-db
           property: connectionString
       - key: QUOTE_REFRESH_SECONDS
-        value: '30'
+        value: '60'
       - key: RATE_LIMIT_PER_MINUTE
         value: '30'
       - key: UPLOAD_DIR
         value: /tmp/jmti
       - key: STORE_RAW_PDF
         value: 'false'
-      - key: TOKEN_ENCRYPTION_KEY
-        sync: false
-      - key: UPSTOX_CLIENT_ID
-        sync: false
-      - key: UPSTOX_CLIENT_SECRET
-        sync: false
-      - key: UPSTOX_REDIRECT_URI
-        sync: false
-      - key: ZERODHA_API_KEY
-        sync: false
-      - key: ZERODHA_API_SECRET
-        sync: false
-      - key: ZERODHA_REDIRECT_URI
-        sync: false
+      - key: BENCHMARK_YAHOO_SYMBOL
+        value: '^NSEI'
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

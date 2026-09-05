@@ -1,37 +1,35 @@
 from __future__ import annotations
-from datetime import datetime,timezone
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-import random,httpx
-from app.core.config import settings
-from app.models.entities import MarketQuote,BrokerConnection,InstrumentMapping
-class MockProvider:
-    name='mock'
-    def quote(self,isin,symbol=None):
-        seed=sum(map(ord,isin));base=50+(seed%500)/10;return {'isin':isin,'symbol':symbol or isin,'ltp':round(base,2),'open':round(base-1,2),'high':round(base+2,2),'low':round(base-3,2),'close':round(base-1.5,2),'volume':10000+seed%50000}
-class UpstoxProvider:
-    name='upstox'
-    def __init__(self,token):self.token=token
-    def quote(self,isin,symbol=None):
-        with httpx.Client(timeout=10) as c:r=c.get('https://api.upstox.com/v2/market-quote/quotes',headers={'Authorization':f'Bearer {self.token}','Accept':'application/json'},params={'instrument_key':symbol or isin});r.raise_for_status();d=r.json();return next(iter(d.get('data',{}).values()))
-class ZerodhaProvider:
-    name='zerodha'
-    def __init__(self,api_key,token):self.api_key=api_key;self.token=token
-    def quote(self,isin,symbol=None):
-        with httpx.Client(timeout=10) as c:r=c.get('https://api.kite.trade/quote',headers={'X-Kite-Version':'3','Authorization':f'token {self.api_key}:{self.token}'},params={'i':symbol or isin});r.raise_for_status();return next(iter(r.json().get('data',{}).values()))
-def get_provider_for_user(db:Session,user_id:int,preferred:str|None=None):
-    p=(preferred or settings.market_data_provider).lower()
-    if p=='upstox':
-        c=db.scalar(select(BrokerConnection).where(BrokerConnection.user_id==user_id,BrokerConnection.provider=='upstox')); 
-        if c:return UpstoxProvider('')
-        if settings.upstox_access_token:return UpstoxProvider(settings.upstox_access_token)
-    if p=='zerodha' and settings.zerodha_api_key and settings.zerodha_access_token:return ZerodhaProvider(settings.zerodha_api_key,settings.zerodha_access_token)
-    return MockProvider()
-def latest_quotes(db:Session,user_id:int,portfolio_id:int|None=None):
-    return db.scalars(select(MarketQuote).where(MarketQuote.user_id==user_id).order_by(MarketQuote.as_of.desc())).all()
-def refresh_quotes(db:Session,user_id:int,portfolio_id:int|None=None):
-    mappings=db.scalars(select(InstrumentMapping).where(InstrumentMapping.user_id==user_id)).all();provider=get_provider_for_user(db,user_id)
-    out=[]
-    for m in mappings:
-        q=provider.quote(m.isin,m.instrument_key);row=MarketQuote(user_id=user_id,isin=m.isin,provider=provider.name,symbol=m.security,ltp=q.get('ltp'),open=q.get('open'),high=q.get('high'),low=q.get('low'),close=q.get('close'),volume=q.get('volume'),as_of=datetime.now(timezone.utc).replace(tzinfo=None));db.add(row);out.append(q)
-    db.commit();return out
+import asyncio
+from datetime import datetime, timezone
+import httpx
+YAHOO_BASE='https://query1.finance.yahoo.com'
+class MarketDataProvider:
+    name='base'
+    async def quotes(self,instruments:list[dict]): raise NotImplementedError
+class YahooFinanceProvider(MarketDataProvider):
+    name='yahoo'
+    @staticmethod
+    async def _search(name:str):
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r=await c.get(f'{YAHOO_BASE}/v1/finance/search',params={'q':name,'quotesCount':10,'newsCount':0});r.raise_for_status();qs=r.json().get('quotes',[])
+            eq=[q for q in qs if q.get('quoteType')=='EQUITY'];ns=[q for q in eq if str(q.get('symbol','')).endswith('.NS')]
+            return (ns or eq or [{}])[0].get('symbol')
+        except Exception:return None
+    @staticmethod
+    async def _one(x):
+        symbol=x.get('symbol') or await YahooFinanceProvider._search(x.get('security') or x['isin'])
+        if not symbol:return {'isin':x['isin'],'provider':'yahoo','symbol':None,'ltp':None,'open':None,'high':None,'low':None,'close':None,'volume':None,'as_of':datetime.now(timezone.utc)}
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r=await c.get(f'{YAHOO_BASE}/v8/finance/chart/{symbol}',params={'range':'1d','interval':'1m','includePrePost':'false'});r.raise_for_status();d=r.json()['chart']['result'][0]
+            meta=d.get('meta',{});q=((d.get('indicators') or {}).get('quote') or [{}])[0];closes=[v for v in q.get('close',[]) if v is not None];opens=[v for v in q.get('open',[]) if v is not None];highs=[v for v in q.get('high',[]) if v is not None];lows=[v for v in q.get('low',[]) if v is not None];vols=[v for v in q.get('volume',[]) if v is not None]
+            return {'isin':x['isin'],'provider':'yahoo','symbol':symbol,'ltp':meta.get('regularMarketPrice') or (closes[-1] if closes else None),'open':opens[0] if opens else None,'high':max(highs) if highs else None,'low':min(lows) if lows else None,'close':meta.get('previousClose'),'volume':vols[-1] if vols else None,'as_of':datetime.now(timezone.utc)}
+        except Exception:return {'isin':x['isin'],'provider':'yahoo','symbol':symbol,'ltp':None,'open':None,'high':None,'low':None,'close':None,'volume':None,'as_of':datetime.now(timezone.utc)}
+    async def quotes(self,instruments:list[dict]): return await asyncio.gather(*(self._one(x) for x in instruments))
+class MockProvider(YahooFinanceProvider):
+    name='yahoo'
+class UpstoxProvider(YahooFinanceProvider):
+    name='yahoo'
+class ZerodhaProvider(YahooFinanceProvider):
+    name='yahoo'
