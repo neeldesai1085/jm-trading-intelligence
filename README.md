@@ -1,78 +1,84 @@
 # JM Trading Intelligence
 
-A small personal trading-analysis app built around JM Financial contract notes. It replaces the spreadsheet workflow with a database-backed web dashboard while keeping deterministic FIFO accounting, charges, reconciliation, graphs, risk analysis and live market-data adapters.
+A multi-user full-stack trading analytics application built around JM Financial contract notes and the Master Trader workbook concept.
 
 ## What it does
 
-- Upload JM Financial contract-note PDFs; parse contracts, executions, securities and charges.
-- Prevent duplicate imports and keep a historical source-of-truth ledger.
-- Reproduce the Excel workbook's 22 analytical/reporting tabs through the Excel Replacement view.
-- Calculate FIFO realized P&L, open holdings, brokerage/levy drag, reconciliation and performance statistics.
-- Show daily/monthly/cumulative P&L, drawdown, concentration, turnover and charge graphs.
-- Connect to Upstox or Zerodha for LTP/OHLC/volume and stream quote updates to the dashboard.
-- Provide advanced trade-quality metrics, stress tests, quote freshness, MFE/MAE snapshots and optional strategy annotations.
-- Optional benchmark snapshots can be collected for approximate beta/alpha-like analysis.
+- Upload JM Financial contract-note PDFs and parse contracts, executions, securities and charges.
+- Keep a historical source-of-truth ledger with idempotent imports.
+- Reproduce the Master Trader workbook through the Excel Replacement view with 22 reporting/analysis areas.
+- Calculate deterministic FIFO realized P&L, open holdings, brokerage/levy drag, reconciliation and performance statistics.
+- Show daily/monthly/cumulative P&L, drawdown, concentration, turnover and charge analysis.
+- Connect to Upstox or Zerodha for LTP/OHLC/volume and stream authenticated quote updates.
+- Provide advanced trade-quality metrics, stress tests, quote freshness, MFE/MAE and optional strategy annotations.
+- Support optional benchmark snapshots for approximate beta/alpha-like analysis.
 
-## Small-user architecture
+## Authentication and user isolation
 
-This is intentionally **not a commercial SaaS architecture**. It is designed for a very small number of trusted users: a static frontend on Vercel, one small FastAPI service on Render, and a small database. There is no account-management, multi-tenant, or family-login layer.
-
-Recommended deployment:
+The application uses ordinary account authentication, not family or household access codes.
 
 ```text
-Vercel Hobby frontend
+Email + password
+      ↓
+ Argon2 password hash
+      ↓
+ JWT access token + rotating database-backed refresh token
+      ↓
+ FastAPI authorization
+      ↓
+ current_user.id
+      ↓
+ user-scoped trading data
+```
+
+Every business record is associated with a `user_id`, and API queries are scoped to the authenticated user. There is no family code, family membership, family role, or shared-family workspace.
+
+## Architecture
+
+```text
+React / Vite SPA
         |
-        | HTTPS / WebSocket
+        | HTTPS + authenticated WebSocket
         v
-Render Free FastAPI backend
-        |
-        +---- SQLite for the simplest setup
-        |     or free PostgreSQL for persistent cloud data
-        |
-        +---- Upstox / Zerodha API (optional)
+FastAPI API
+  |     |      |       |
+ Auth  Import  FIFO   Market data
+  |     |      |       |
+  +-----+------+-------+
+              |
+          SQLAlchemy
+              |
+      SQLite / PostgreSQL
 ```
 
-Uploaded PDFs are processed and then removed from temporary server storage; the extracted trading ledger is what is retained.
+SQLite is convenient for local development. PostgreSQL is the recommended persistent database for cloud deployment and future growth.
 
-## Free deployment
+## Master Trader / Excel replacement
 
-### Backend on Render
+The Excel Replacement endpoint represents these 22 workbook areas:
 
-The repository includes `render.yaml`. Create a Render Blueprint from this repository and select the Free web-service plan.
-
-For the simplest deployment you can use the default SQLite configuration. Be aware that a free Render web service has an ephemeral filesystem, so a SQLite database there is not a reliable permanent backup. For persistent cloud history, set `DATABASE_URL` to a free PostgreSQL provider such as Supabase or Neon.
-
-Set:
-
-```text
-DATABASE_URL=<SQLite default or PostgreSQL connection string>
-CORS_ORIGINS=https://YOUR-APP.vercel.app
-MARKET_DATA_PROVIDER=mock
-```
-
-For live prices, choose `upstox` or `zerodha` and add the corresponding provider credentials. Keep those credentials only in Render environment variables; never commit them.
-
-### Frontend on Vercel
-
-Import the GitHub repository into Vercel. The included `vercel.json` builds `frontend/` and publishes `frontend/dist`.
-
-Set:
-
-```text
-VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
-VITE_WS_URL=wss://YOUR-RENDER-SERVICE.onrender.com/api/ws/quotes
-```
-
-### Upload the historical contract notes
-
-After the app opens:
-
-1. Open **Upload PDFs**.
-2. Select your JM Financial contract-note PDFs.
-3. Let the importer build the ledger.
-4. Open **Excel Replacement** to inspect the workbook-equivalent analysis.
-5. Configure **Market Data** mappings for the securities you want live prices for.
-6. Open **Risk & Intelligence** and **Advanced Analytics** for the decision-support layer.
+1. Dashboard
+2. Trader Review
+3. Source of Truth
+4. Dashboard Calc
+5. Contract Notes
+6. Security Ledger
+7. Execution Ledger
+8. Charges Detail
+9. Charge Summary
+10. Charge Allocation
+11. FIFO / Realized P&L
+12. Open Holdings
+13. Realized P&L by Security
+14. Security Summary
+15. Monthly Performance
+16. Cumulative P&L
+17. Reconciliation
+18. Performance Metrics
+19. Source Audit
+20. Data Dictionary
+21. Report Notes
+22. Master Calc
 
 ## Local run
 
@@ -83,6 +89,59 @@ docker compose up --build
 Frontend: http://localhost:5173  
 Backend/API docs: http://localhost:8000/docs
 
+Native development:
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Database migrations
+
+Alembic is included. Container startup runs `alembic upgrade head` before Uvicorn. For future schema changes, create an incremental revision and deploy it with the application.
+
+## Cloud deployment
+
+The repository includes `render.yaml` and `vercel.json`.
+
+Recommended low-cost architecture:
+
+```text
+Vercel frontend
+      |
+      v
+Render FastAPI service
+      |
+      v
+Managed PostgreSQL
+```
+
+Set `AUTH_SECRET` to a long random secret, `DATABASE_URL` to the managed PostgreSQL connection string, and `CORS_ORIGINS` to the exact frontend origin. Broker credentials remain backend environment secrets.
+
+The Render Blueprint uses a Docker build context of `./backend`, so the backend Dockerfile can reliably copy its application and migration files in the monorepo. Render's free filesystem is ephemeral; do not use free-service SQLite as permanent trading-data storage.
+
+For larger public usage, the next scaling layer is a managed Redis/pub-sub service, background workers for large PDF imports, object storage for source documents, encrypted broker-token storage, provider OAuth flows, and centralized observability/rate limiting.
+
+## Data workflow
+
+1. Create an account.
+2. Sign in.
+3. Upload JM Financial contract-note PDFs.
+4. Review import/audit results.
+5. Inspect the Excel Replacement dashboard.
+6. Configure provider instrument mappings for live quotes.
+7. Review Risk & Intelligence and Advanced Analytics.
+8. Export user-scoped datasets when needed.
+
+The source JM Financial PDF and workbook are not committed to the repository because they contain private trading information.
+
 ## Testing
 
 ```bash
@@ -90,10 +149,4 @@ python -m compileall -q backend/app scripts tests
 pytest -q
 ```
 
-The repository's CI also builds the frontend and validates Docker Compose configuration. The source JM Financial PDF and workbook are intentionally not committed because they contain private trading data.
-
-## Important free-tier behavior
-
-Free hosting is suitable for a small number of users, but it has limits. The Render service can sleep when idle, so the first request after inactivity can be slower. Free database services also have storage/usage limits. The application therefore keeps the architecture small and avoids a paid Redis/worker/object-storage stack.
-
-Live-market availability depends on the API access and rate limits of your chosen broker/provider. If no provider credentials or instrument mapping exist, the app shows missing quotes rather than inventing prices.
+CI also builds the frontend and validates Docker Compose configuration. Live-market results depend on the selected broker/provider's access and rate limits; the application does not invent prices when a quote is unavailable.
