@@ -1,32 +1,37 @@
-from datetime import datetime, timezone
-import httpx
-class MarketDataProvider:
-    name='base'
-    async def quotes(self,instruments:list[dict]):raise NotImplementedError
-class MockProvider(MarketDataProvider):
+from __future__ import annotations
+from datetime import datetime,timezone
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+import random,httpx
+from app.core.config import settings
+from app.models.entities import MarketQuote,BrokerConnection,InstrumentMapping
+class MockProvider:
     name='mock'
-    async def quotes(self,instruments):return [{**x,'provider':self.name,'symbol':x.get('symbol') or x['isin'],'ltp':None,'open':None,'high':None,'low':None,'close':None,'volume':None,'as_of':datetime.now(timezone.utc)} for x in instruments]
-class UpstoxProvider(MarketDataProvider):
+    def quote(self,isin,symbol=None):
+        seed=sum(map(ord,isin));base=50+(seed%500)/10;return {'isin':isin,'symbol':symbol or isin,'ltp':round(base,2),'open':round(base-1,2),'high':round(base+2,2),'low':round(base-3,2),'close':round(base-1.5,2),'volume':10000+seed%50000}
+class UpstoxProvider:
     name='upstox'
     def __init__(self,token):self.token=token
-    async def quotes(self,instruments):
-        keys=[x['symbol'] for x in instruments if x.get('symbol')]
-        if not keys:return []
-        async with httpx.AsyncClient(timeout=15) as c:
-            r=await c.get('https://api.upstox.com/v3/market-quote/ohlc',headers={'Accept':'application/json','Authorization':f'Bearer {self.token}'},params={'instrument_key':','.join(keys),'interval':'1d'});r.raise_for_status();data=r.json().get('data',{})
-        out=[]
-        for x in instruments:
-            d=data.get(x.get('symbol',''),{});live=d.get('live_ohlc') or d.get('ohlc') or {};prev=d.get('prev_ohlc') or {};out.append({'isin':x['isin'],'provider':self.name,'symbol':x.get('symbol'),'ltp':d.get('last_price'),'open':live.get('open'),'high':live.get('high'),'low':live.get('low'),'close':prev.get('close') or live.get('close'),'volume':live.get('volume'),'as_of':datetime.now(timezone.utc)})
-        return out
-class ZerodhaProvider(MarketDataProvider):
+    def quote(self,isin,symbol=None):
+        with httpx.Client(timeout=10) as c:r=c.get('https://api.upstox.com/v2/market-quote/quotes',headers={'Authorization':f'Bearer {self.token}','Accept':'application/json'},params={'instrument_key':symbol or isin});r.raise_for_status();d=r.json();return next(iter(d.get('data',{}).values()))
+class ZerodhaProvider:
     name='zerodha'
-    def __init__(self,api_key,access_token):self.api_key=api_key;self.access_token=access_token
-    async def quotes(self,instruments):
-        qs=[('i',x['symbol']) for x in instruments if x.get('symbol')]
-        if not qs:return []
-        async with httpx.AsyncClient(timeout=15) as c:
-            r=await c.get('https://api.kite.trade/quote/ohlc',headers={'X-Kite-Version':'3','Authorization':f'token {self.api_key}:{self.access_token}'},params=qs);r.raise_for_status();data=r.json().get('data',{})
-        out=[]
-        for x in instruments:
-            d=data.get(x.get('symbol',''),{});o=d.get('ohlc',{});out.append({'isin':x['isin'],'provider':self.name,'symbol':x.get('symbol'),'ltp':d.get('last_price'),'open':o.get('open'),'high':o.get('high'),'low':o.get('low'),'close':o.get('close'),'volume':d.get('volume'),'as_of':datetime.now(timezone.utc)})
-        return out
+    def __init__(self,api_key,token):self.api_key=api_key;self.token=token
+    def quote(self,isin,symbol=None):
+        with httpx.Client(timeout=10) as c:r=c.get('https://api.kite.trade/quote',headers={'X-Kite-Version':'3','Authorization':f'token {self.api_key}:{self.token}'},params={'i':symbol or isin});r.raise_for_status();return next(iter(r.json().get('data',{}).values()))
+def get_provider_for_user(db:Session,user_id:int,preferred:str|None=None):
+    p=(preferred or settings.market_data_provider).lower()
+    if p=='upstox':
+        c=db.scalar(select(BrokerConnection).where(BrokerConnection.user_id==user_id,BrokerConnection.provider=='upstox')); 
+        if c:return UpstoxProvider('')
+        if settings.upstox_access_token:return UpstoxProvider(settings.upstox_access_token)
+    if p=='zerodha' and settings.zerodha_api_key and settings.zerodha_access_token:return ZerodhaProvider(settings.zerodha_api_key,settings.zerodha_access_token)
+    return MockProvider()
+def latest_quotes(db:Session,user_id:int,portfolio_id:int|None=None):
+    return db.scalars(select(MarketQuote).where(MarketQuote.user_id==user_id).order_by(MarketQuote.as_of.desc())).all()
+def refresh_quotes(db:Session,user_id:int,portfolio_id:int|None=None):
+    mappings=db.scalars(select(InstrumentMapping).where(InstrumentMapping.user_id==user_id)).all();provider=get_provider_for_user(db,user_id)
+    out=[]
+    for m in mappings:
+        q=provider.quote(m.isin,m.instrument_key);row=MarketQuote(user_id=user_id,isin=m.isin,provider=provider.name,symbol=m.security,ltp=q.get('ltp'),open=q.get('open'),high=q.get('high'),low=q.get('low'),close=q.get('close'),volume=q.get('volume'),as_of=datetime.now(timezone.utc).replace(tzinfo=None));db.add(row);out.append(q)
+    db.commit();return out

@@ -1,1 +1,1 @@
-export function KpiCard({label,value,sub}:{label:string,value:string,sub?:string}){return <div className="kpi"><div className="eyebrow">{label}</div><div className="value">{value}</div><div className="sub">{sub}</div></div>}
+export default function KpiCard({label,value,sub}:{label:string,value:any,sub?:string}){return <div className="kpi"><span>{label}</span><strong>{value}</strong>{sub&&<small>{sub}</small>}</div>}

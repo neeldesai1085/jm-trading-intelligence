@@ -1,22 +1,38 @@
-"""Initial multi-user schema.
-
-The ORM metadata is the single source of truth for the initial deployment; Alembic records
-that the schema has been initialized so subsequent revisions can be incremental.
-"""
+"""Initial multi-user schema (pre-portfolio extension)."""
 from alembic import op
-from sqlalchemy import text
-from app.db.session import Base, engine
-from app.models import entities
+import sqlalchemy as sa
 
-revision='786383fd7320'
-down_revision=None
-branch_labels=None
-depends_on=None
+revision = '786383fd7320'
+down_revision = None
+branch_labels = None
+depends_on = None
+
 
 def upgrade():
-    Base.metadata.create_all(bind=engine)
+    op.create_table('users',
+        sa.Column('id', sa.Integer(), primary_key=True), sa.Column('email', sa.String(320), nullable=False),
+        sa.Column('name', sa.String(120), nullable=False), sa.Column('password_hash', sa.String(512), nullable=False),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()), sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.UniqueConstraint('email', name='uq_users_email'))
+    op.create_index('ix_users_email', 'users', ['email'], unique=True); op.create_index('ix_users_is_active', 'users', ['is_active'])
+    op.create_table('auth_sessions', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('jti', sa.String(128), nullable=False), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('expires_at', sa.DateTime(), nullable=False), sa.Column('revoked_at', sa.DateTime()), sa.Column('created_at', sa.DateTime(), nullable=False), sa.UniqueConstraint('jti'))
+    op.create_index('ix_auth_sessions_jti','auth_sessions',['jti'],unique=True); op.create_index('ix_auth_sessions_user_id','auth_sessions',['user_id'])
+    op.create_table('import_batches', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('filename', sa.String(255), nullable=False), sa.Column('file_hash', sa.String(64), nullable=False), sa.Column('status', sa.String(32), nullable=False), sa.Column('contract_notes_found', sa.Integer(), nullable=False), sa.Column('contracts_added', sa.Integer(), nullable=False), sa.Column('duplicates', sa.Integer(), nullable=False), sa.Column('executions_added', sa.Integer(), nullable=False), sa.Column('security_rows_added', sa.Integer(), nullable=False), sa.Column('errors', sa.Text()), sa.Column('created_at', sa.DateTime(), nullable=False), sa.UniqueConstraint('user_id','file_hash',name='uq_import_user_hash'))
+    op.create_index('ix_import_batches_user_id','import_batches',['user_id'])
+    op.create_table('contract_notes', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('contract_note', sa.String(64), nullable=False), sa.Column('trade_date', sa.Date(), nullable=False), sa.Column('settlement_date', sa.Date()), sa.Column('settlement_no', sa.String(255)), sa.Column('source_file', sa.String(255)), sa.Column('contract_note_page', sa.Integer()), sa.Column('annexure_page', sa.Integer()), sa.Column('buy_qty', sa.Integer(), nullable=False), sa.Column('sell_qty', sa.Integer(), nullable=False), sa.Column('gross_buy_value', sa.Float(), nullable=False), sa.Column('gross_sell_value', sa.Float(), nullable=False), sa.Column('displayed_brokerage', sa.Float(), nullable=False), sa.Column('buy_value_after_brokerage', sa.Float(), nullable=False), sa.Column('sell_value_after_brokerage', sa.Float(), nullable=False), sa.Column('market_flow_after_brokerage', sa.Float(), nullable=False), sa.Column('payin_obligation', sa.Float(), nullable=False), sa.Column('taxable_value', sa.Float(), nullable=False), sa.Column('stt', sa.Float(), nullable=False), sa.Column('cgst', sa.Float(), nullable=False), sa.Column('sgst', sa.Float(), nullable=False), sa.Column('ugst', sa.Float(), nullable=False), sa.Column('igst', sa.Float(), nullable=False), sa.Column('exchange_charges', sa.Float(), nullable=False), sa.Column('sebi_fees', sa.Float(), nullable=False), sa.Column('stamp_duty', sa.Float(), nullable=False), sa.Column('ipft', sa.Float(), nullable=False), sa.Column('net_amount', sa.Float(), nullable=False), sa.UniqueConstraint('user_id','contract_note',name='uq_contract_user_note'))
+    op.create_index('ix_contract_notes_user_id','contract_notes',['user_id']); op.create_index('ix_contract_notes_trade_date','contract_notes',['trade_date'])
+    op.create_table('security_ledger', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('contract_note', sa.String(64), nullable=False), sa.Column('trade_date', sa.Date(), nullable=False), sa.Column('isin', sa.String(32), nullable=False), sa.Column('security', sa.String(255), nullable=False), sa.Column('buy_qty', sa.Integer(), nullable=False), sa.Column('buy_wap', sa.Float(), nullable=False), sa.Column('buy_brokerage_share', sa.Float(), nullable=False), sa.Column('buy_wap_after_brokerage', sa.Float(), nullable=False), sa.Column('total_buy_value_after_brokerage', sa.Float(), nullable=False), sa.Column('gross_buy', sa.Float(), nullable=False), sa.Column('displayed_buy_brokerage', sa.Float(), nullable=False), sa.Column('sell_qty', sa.Integer(), nullable=False), sa.Column('sell_wap', sa.Float(), nullable=False), sa.Column('sell_brokerage_share', sa.Float(), nullable=False), sa.Column('sell_wap_after_brokerage', sa.Float(), nullable=False), sa.Column('total_sell_value_after_brokerage', sa.Float(), nullable=False), sa.Column('gross_sell', sa.Float(), nullable=False), sa.Column('displayed_sell_brokerage', sa.Float(), nullable=False), sa.Column('net_qty', sa.Integer(), nullable=False), sa.Column('net_obligation_before_levies', sa.Float(), nullable=False))
+    op.create_index('ix_security_ledger_user_id','security_ledger',['user_id']); op.create_index('ix_security_ledger_trade_date','security_ledger',['trade_date']); op.create_index('ix_security_ledger_isin','security_ledger',['isin']); op.create_index('ix_security_ledger_security','security_ledger',['security'])
+    op.create_table('executions', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('contract_note', sa.String(64), nullable=False), sa.Column('trade_date', sa.Date(), nullable=False), sa.Column('order_no', sa.String(64), nullable=False), sa.Column('order_time', sa.String(32), nullable=False), sa.Column('trade_no', sa.String(64), nullable=False), sa.Column('trade_time', sa.String(32), nullable=False), sa.Column('security', sa.String(255), nullable=False), sa.Column('exchange', sa.String(16), nullable=False), sa.Column('side', sa.String(8), nullable=False), sa.Column('quantity', sa.Integer(), nullable=False), sa.Column('market_rate', sa.Float(), nullable=False), sa.Column('amount', sa.Float(), nullable=False), sa.UniqueConstraint('user_id','contract_note','trade_no',name='uq_exec'))
+    op.create_index('ix_executions_user_id','executions',['user_id']); op.create_index('ix_executions_trade_date','executions',['trade_date']); op.create_index('ix_executions_security','executions',['security'])
+    op.create_table('market_quotes', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('isin', sa.String(32), nullable=False), sa.Column('provider', sa.String(32), nullable=False), sa.Column('symbol', sa.String(128)), sa.Column('ltp', sa.Float()), sa.Column('open', sa.Float()), sa.Column('high', sa.Float()), sa.Column('low', sa.Float()), sa.Column('close', sa.Float()), sa.Column('volume', sa.Integer()), sa.Column('as_of', sa.DateTime(), nullable=False))
+    op.create_index('ix_market_quotes_user_id','market_quotes',['user_id']); op.create_index('ix_market_quotes_isin','market_quotes',['isin']); op.create_index('ix_market_quotes_as_of','market_quotes',['as_of'])
+    op.create_table('instrument_mappings', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('isin', sa.String(32), nullable=False), sa.Column('security', sa.String(255), nullable=False), sa.Column('provider', sa.String(32), nullable=False), sa.Column('instrument_key', sa.String(128), nullable=False), sa.UniqueConstraint('user_id','isin','provider',name='uq_mapping_user_isin_provider'))
+    op.create_index('ix_instrument_mappings_user_id','instrument_mappings',['user_id']); op.create_index('ix_instrument_mappings_isin','instrument_mappings',['isin'])
+    op.create_table('trade_annotations', sa.Column('id', sa.Integer(), primary_key=True), sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False), sa.Column('security', sa.String(255), nullable=False), sa.Column('buy_date', sa.Date(), nullable=False), sa.Column('sell_date', sa.Date(), nullable=False), sa.Column('strategy', sa.String(128), nullable=False), sa.Column('setup', sa.String(128), nullable=False), sa.Column('regime', sa.String(128), nullable=False), sa.Column('note', sa.Text()), sa.UniqueConstraint('user_id','security','buy_date','sell_date',name='uq_trade_annotation'))
+    op.create_index('ix_trade_annotations_user_id','trade_annotations',['user_id'])
+
 
 def downgrade():
-    bind=op.get_bind()
-    for table in reversed(Base.metadata.sorted_tables):
-        table.drop(bind=bind,checkfirst=True)
+    for table in ['trade_annotations','instrument_mappings','market_quotes','executions','security_ledger','contract_notes','import_batches','auth_sessions','users']:
+        op.drop_table(table)
