@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.entities import Execution, MarketQuote
+from app.models.entities import Execution, MarketQuote, SecurityLedger
 from app.services.analytics import fifo_lots
 
 
@@ -110,13 +110,22 @@ def advanced(db: Session, user_id: int, portfolio_id: int | None = None):
     latest = {}
     for row in quote_rows:
         latest.setdefault(row.isin, row)
+
+    ledger_query = select(SecurityLedger).where(SecurityLedger.user_id == user_id)
+    if portfolio_id is not None:
+        ledger_query = ledger_query.where(SecurityLedger.portfolio_id == portfolio_id)
+    ledger_rows = db.scalars(ledger_query.order_by(SecurityLedger.trade_date, SecurityLedger.id)).all()
+    security_to_isin = {}
+    for row in ledger_rows:
+        security_to_isin.setdefault(row.security, row.isin)
+
     holdings_map = defaultdict(lambda: {'quantity': 0, 'book_cost': 0.0})
     for lot in open_lots:
         holdings_map[lot['security']]['quantity'] += lot['qty']
         holdings_map[lot['security']]['book_cost'] += lot['qty'] * lot['unit_cost']
     holdings = []
     for security, value in sorted(holdings_map.items()):
-        isin = next((row.isin for row in executions if row.security == security), None)
+        isin = security_to_isin.get(security)
         quote = latest.get(isin)
         market_value = quote.ltp * value['quantity'] if quote and quote.ltp is not None else None
         holdings.append({'security': security, 'isin': isin, **value, 'market_value': market_value, 'quote_as_of': quote.as_of if quote else None})
@@ -133,13 +142,9 @@ def advanced(db: Session, user_id: int, portfolio_id: int | None = None):
         'sharpe_like': sharpe,
         'avg_holding_days': mean(holding_days) if holding_days else None,
         'max_holding_days': max(holding_days) if holding_days else None,
-        'min_holding_days': min(holding_days) if holding_days else None,
-        'avg_trade_pnl': expectancy,
-        'gross_profit': sum(wins),
-        'gross_loss': sum(losses),
-        'open_lots': sum(lot['qty'] for lot in open_lots),
+        'closed': closed,
+        'open_lots': open_lots,
+        'holdings': holdings,
         'benchmark': _benchmark(db, user_id, portfolio_id, holdings),
+        'generated_at': datetime.now(timezone.utc).isoformat(),
     }
-
-
-advanced_analytics = advanced
